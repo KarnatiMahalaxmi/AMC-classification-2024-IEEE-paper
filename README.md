@@ -1,4 +1,4 @@
-# Automatic Modulation Classification for Low-Power IoT
+# Automatic Modulation Classification for Low-Power IoT Applications
 
 A lightweight **Automatic Modulation Classification (AMC)** system for identifying digital and analog modulation schemes from wireless IQ signal samples using statistical signal features and a compact neural network.
 
@@ -12,480 +12,456 @@ Wireless communication systems use different modulation schemes to encode inform
 
 This project focuses on a resource-efficient approach suitable for **low-power and resource-constrained IoT environments**.
 
-Instead of directly processing raw IQ samples with a large deep-learning model, the system:
+This project follows a feature-based approach:
 
-1. Processes IQ signal samples.
-2. Extracts statistical and signal-processing features.
-3. Normalizes the resulting feature vectors.
-4. Classifies the modulation using a lightweight MLP neural network.
-5. Evaluates classification performance across different SNR conditions.
+```text
+Raw IQ Samples
+      │
+      ▼
+Signal Preprocessing
+      │
+      ▼
+25 Statistical & Signal Features
+      │
+      ▼
+Feature Scaling
+      │
+      ▼
+Lightweight MLP Classifier
+      │
+      ▼
+11 Modulation Classes
+```
+
+The implementation focuses on reducing the computational input size while retaining useful characteristics of the received signal.
 
 ---
 
 ## Key Features
 
-* Automatic classification of **11 modulation schemes**
-* IQ signal processing using **I/Q components**
-* Statistical and signal-processing based feature extraction
-* Time-domain, amplitude, phase, spectral and higher-order features
-* Feature normalization using `StandardScaler`
-* Lightweight **Multi-Layer Perceptron (MLP)** classifier
-* Stratified train/test split
-* Classification evaluation using accuracy and F1-score
-* Confusion matrix analysis
-* SNR-based performance analysis
-* Feature importance analysis using permutation-based evaluation
-* Designed around low-complexity inference for IoT-oriented applications
+* Classification of **11 digital and analog modulation schemes**
+* Uses **IQ signal samples** as the input
+* Extracts **25 engineered statistical and signal-processing features**
+* Reduces each sample from **256 raw IQ values to 25 features**
+* Lightweight MLP architecture suitable for resource-constrained applications
+* Evaluation across multiple SNR levels
+* Confusion matrix and per-class accuracy analysis
+* SNR-dependent performance analysis
+* Feature importance analysis
+* Signal and feature visualizations
 
 ---
 
-## Modulation Classes
+## Supported Modulation Schemes
 
-The implementation works with the following 11 modulation classes:
-
-| Modulation | Type    |
-| ---------- | ------- |
-| BPSK       | Digital |
-| QPSK       | Digital |
-| 8PSK       | Digital |
-| QAM16      | Digital |
-| QAM64      | Digital |
-| CPFSK      | Digital |
-| GFSK       | Digital |
-| PAM4       | Digital |
-| AM-DSB     | Analog  |
-| AM-SSB     | Analog  |
-| WBFM       | Analog  |
-
-The dataset configuration contains SNR levels ranging from **-20 dB to +18 dB in 2 dB increments**.
+| #  | Modulation |
+| -- | ---------- |
+| 1  | BPSK       |
+| 2  | QPSK       |
+| 3  | 8PSK       |
+| 4  | QAM16      |
+| 5  | QAM64      |
+| 6  | CPFSK      |
+| 7  | GFSK       |
+| 8  | AM-DSB     |
+| 9  | AM-SSB     |
+| 10 | PAM4       |
+| 11 | WBFM       |
 
 ---
 
 ## Dataset
 
-The project is structured around the **RadioML 2016.10A** dataset.
+The implementation is based on the **RadioML 2016.10A** dataset structure.
 
 ### Dataset characteristics
 
-* **11 modulation classes**
-* **20 SNR levels**
-* SNR range: **-20 dB to +18 dB**
-* **1,000 examples** per modulation/SNR combination
-* **220,000 total signal examples**
-* Each signal contains **128 IQ samples**
-* I and Q are represented as two separate channels
+| Property                         |            Value |
+| -------------------------------- | ---------------: |
+| Modulation classes               |               11 |
+| SNR levels                       |               20 |
+| SNR range                        | -20 dB to +18 dB |
+| SNR step                         |             2 dB |
+| Examples per modulation/SNR pair |            1,000 |
+| Total examples                   |          220,000 |
+| IQ samples per example           |              128 |
+| Raw values per example           |              256 |
 
-Each sample therefore contains:
+Each signal example contains:
 
 ```text
-2 × 128 = 256 raw IQ values
+I channel → 128 samples
+Q channel → 128 samples
+
+Total → 256 raw values
 ```
 
-The notebook attempts to load the original `RML2016.10a_dict.pkl` dataset. If the dataset is unavailable, it generates a synthetic dataset with the same overall structural configuration for demonstration and experimentation.
+### Dataset availability
 
-> **Important:** Results obtained using the synthetic fallback should not be interpreted as results on the original RadioML dataset.
+The notebook attempts to use the `RML2016.10a_dict.pkl` dataset.
+
+If the original dataset is unavailable, the notebook contains a synthetic-data generation path that reproduces the expected dataset structure for experimentation.
+
+**Important:** results obtained from synthetic data should not be interpreted as results obtained directly from the original RadioML dataset.
 
 ---
 
-## System Architecture
+# Feature Engineering
 
-```text
-                IQ Signal
-                    │
-                    ▼
-        ┌───────────────────────┐
-        │ Signal Preprocessing  │
-        │ I / Q Components      │
-        └───────────┬───────────┘
-                    │
-                    ▼
-        ┌───────────────────────┐
-        │ Feature Extraction    │
-        │                       │
-        │ • Time-domain         │
-        │ • Amplitude           │
-        │ • Phase               │
-        │ • Spectral            │
-        │ • Higher-order stats  │
-        └───────────┬───────────┘
-                    │
-                    ▼
-             25 Features
-                    │
-                    ▼
-        ┌───────────────────────┐
-        │ StandardScaler        │
-        │ Feature Normalization │
-        └───────────┬───────────┘
-                    │
-                    ▼
-        ┌───────────────────────┐
-        │ Lightweight MLP       │
-        │                       │
-        │ 25 → 25 → 12 → 11     │
-        │ ReLU + Softmax        │
-        └───────────┬───────────┘
-                    │
-                    ▼
-          Predicted Modulation
-```
+Instead of feeding all 256 raw IQ values directly into the classifier, the project extracts **25 engineered features**.
 
----
-
-## Feature Engineering
-
-A central part of the project is replacing direct processing of raw IQ samples with a compact statistical representation.
-
-The implementation extracts **25 features** from the signal.
+The features capture different characteristics of the received signal.
 
 ### Feature categories
 
-| Category                | Examples                                                   |
-| ----------------------- | ---------------------------------------------------------- |
-| Time Domain             | Mean, variance, skewness, kurtosis                         |
-| Amplitude               | Envelope mean, envelope variance                           |
-| Power                   | Mean power, PAPR                                           |
-| Phase                   | Mean and variance of instantaneous phase                   |
-| Frequency               | Mean frequency, frequency variance                         |
-| Spectral                | PSD, spectral centroid, spectral spread, spectral flatness |
-| Higher-Order Statistics | Cumulant-based features                                    |
+#### Time-domain features
 
-This reduces the model input from:
+* I/Q mean
+* I/Q variance
+* Skewness
+* Kurtosis
+
+#### Amplitude features
+
+* Envelope mean
+* Envelope variance
+* Envelope kurtosis
+* Peak-to-Average Power Ratio (PAPR)
+
+#### Phase features
+
+* Phase statistics
+* Phase variation characteristics
+
+#### Spectral features
+
+* Frequency-domain statistics
+* Maximum PSD
+* Mean PSD
+* Spectral centroid
+* Spectral spread
+* Spectral flatness
+
+#### Higher-order statistics
+
+* Signal cumulants
+* Distribution-related characteristics
+
+### Dimensionality reduction
 
 ```text
-256 raw IQ values
-        ↓
+Raw IQ representation
+256 values
+    │
+    ▼
+Feature extraction
+    │
+    ▼
 25 engineered features
 ```
 
-The feature vector therefore contains approximately **9.8% of the original number of input values** while retaining signal characteristics useful for modulation classification.
+This reduces the feature representation to approximately **9.8% of the original input size**.
 
 ---
 
-## Machine Learning Model
+# Machine Learning Model
 
-The primary classifier is a compact **Multi-Layer Perceptron (MLP)**.
+The project uses a lightweight **Multi-Layer Perceptron (MLP)** classifier.
 
 ### Architecture
 
 ```text
 Input Layer
-25 features
+25 Features
      │
      ▼
-Hidden Layer
-25 neurons
+Dense Layer
+25 Neurons
 ReLU
      │
      ▼
-Hidden Layer
-12 neurons
+Dense Layer
+12 Neurons
 ReLU
      │
      ▼
 Output Layer
-11 neurons
+11 Neurons
 Softmax
-     │
-     ▼
-Modulation Class
 ```
 
 ### Model configuration
 
-| Parameter            | Value          |
-| -------------------- | -------------- |
-| Model                | MLP Classifier |
-| Input Features       | 25             |
-| Hidden Layers        | 25, 12         |
-| Hidden Activation    | ReLU           |
-| Output               | 11 classes     |
-| Output Activation    | Softmax        |
-| Optimizer            | Adam           |
-| Learning Rate        | 0.001          |
-| Trainable Parameters | 1,105          |
+| Parameter            | Value      |
+| -------------------- | ---------- |
+| Input features       | 25         |
+| Hidden layer 1       | 25 neurons |
+| Hidden layer 2       | 12 neurons |
+| Output classes       | 11         |
+| Hidden activation    | ReLU       |
+| Output activation    | Softmax    |
+| Optimizer            | Adam       |
+| Learning rate        | 0.001      |
+| Trainable parameters | 1,105      |
 
-The compact architecture is intended to reduce computational and memory requirements compared with large CNN-based modulation classifiers.
+The compact architecture keeps the model relatively small compared with deep neural network approaches that operate directly on raw IQ data.
 
 ---
 
-## Training Pipeline
+# Training Pipeline
 
-The training workflow consists of the following stages:
+The complete training pipeline is:
 
 ```text
-RadioML / Synthetic Dataset
-          │
-          ▼
-     IQ Samples
-          │
-          ▼
- Feature Extraction
-          │
-          ▼
-   25-D Feature Vector
-          │
-          ▼
-    Train/Test Split
-       80 / 20
-          │
-          ▼
-    StandardScaler
-          │
-          ▼
-     MLP Training
-          │
-          ▼
-   Model Evaluation
+IQ Dataset
+    │
+    ▼
+Signal Feature Extraction
+    │
+    ▼
+25 Engineered Features
+    │
+    ▼
+Stratified Train/Test Split
+    │
+    ├───────────────┐
+    ▼               ▼
+Training Set      Test Set
+    │               │
+    ▼               │
+StandardScaler      │
+    │               │
+    ▼               │
+MLP Training        │
+    │               │
+    └───────┬───────┘
+            ▼
+       Predictions
+            │
+            ▼
+ Accuracy / F1 / Confusion Matrix
 ```
 
-The dataset is split using stratification to maintain class distribution between training and testing sets. Feature scaling is fitted only on the training data and subsequently applied to the test data to avoid data leakage.
+### Train/Test Split
+
+The dataset is divided using an **80/20 stratified split**:
+
+* Training samples: **176,000**
+* Test samples: **44,000**
+
+Feature scaling is fitted on the training data and then applied to the test data.
 
 ---
 
-## Evaluation
+# Results
 
-The implementation evaluates the classifier using:
+The reported implementation achieved the following overall results:
 
-* Accuracy
-* Weighted F1-score
-* Classification report
-* Confusion matrix
-* SNR-dependent accuracy
-* Feature importance analysis
+| Metric                  |     Result |
+| ----------------------- | ---------: |
+| Overall Accuracy        | **51.68%** |
+| Weighted F1 Score       | **0.4990** |
+| Accuracy at SNR ≥ 10 dB | **89.38%** |
 
-### Experimental Results
-
-For the reported replication experiment:
-
-| Metric                  |  Result |
-| ----------------------- | ------: |
-| Overall Accuracy        |  51.68% |
-| Weighted F1             |  0.4990 |
-| Accuracy at SNR ≥ 10 dB |  89.38% |
-| Train Samples           | 176,000 |
-| Test Samples            |  44,000 |
-| Features                |      25 |
-| Parameters              |   1,105 |
-
-A second single-hidden-layer model was also evaluated, producing **51.88% accuracy** and a **0.5106 weighted F1-score** in the reported experiment.
-
-> These figures are experimental results from the implementation and should not be presented as the original paper's results.
+Performance varies substantially with SNR. Classification becomes considerably more difficult at low SNR because noise makes the statistical and spectral characteristics of different modulation schemes less distinguishable.
 
 ---
 
-## SNR Analysis
+# Visualizations
 
-Signal-to-Noise Ratio has a significant effect on modulation classification.
+The repository contains visualizations generated during the experiment.
 
-At lower SNR values, noise makes the characteristics of different modulation schemes harder to distinguish. The project therefore evaluates classification performance across different SNR conditions rather than reporting only a single aggregate metric.
+## Signal Gallery
 
-The reported experiment achieved **89.38% accuracy for SNR ≥ 10 dB**, while overall accuracy across the complete SNR range was **51.68%**.
+Examples of the analyzed modulation signals and their IQ characteristics.
+
+![Signal Gallery](signal_gallery.png)
+
+---
+
+## Feature Scatter
+
+Visualization of the extracted feature space for different modulation classes.
+
+![Feature Scatter](feature_scatter.png)
+
+---
+
+## Confusion Matrix
+
+The confusion matrix shows classification behavior across the 11 modulation classes.
+
+![Confusion Matrix](confusion_matrix.png)
+
+A notable confusion pattern in the implementation is between **8PSK and QPSK**, particularly under lower-SNR conditions.
+
+---
+
+## Per-Class Accuracy
+
+Classification accuracy for each modulation class.
+
+![Per Class Accuracy](per_class_accuracy.png)
+
+---
+
+## Accuracy vs SNR
+
+The relationship between classification accuracy and signal-to-noise ratio.
+
+![Accuracy vs SNR](accuracy_vs_snr.png)
+
+The classifier performs substantially better at higher SNR levels, with the reported accuracy reaching **89.38% for SNR ≥ 10 dB**.
 
 ---
 
 ## Feature Importance
 
-The project also performs permutation-based feature importance analysis.
+Permutation-based feature importance is used to analyze the contribution of engineered features to classification performance.
 
-The basic procedure is:
+![Feature Importance](feature_importance.png)
+
+This provides an interpretable view of which signal characteristics are most useful to the classifier.
+
+---
+
+# Performance by SNR
+
+SNR has a strong influence on AMC performance.
 
 ```text
-Original Feature
-      │
-      ▼
-Shuffle Feature
-      │
-      ▼
-Evaluate Model
-      │
-      ▼
-Measure Accuracy Drop
-      │
-      ▼
-Estimate Feature Importance
+Low SNR
+   │
+   │  Signal characteristics obscured by noise
+   ▼
+Lower classification accuracy
+   │
+   │
+   ▼
+Higher SNR
+   │
+   │  Signal characteristics become more distinguishable
+   ▼
+Higher classification accuracy
 ```
 
-A larger reduction in classification accuracy after shuffling a feature indicates that the model relies more heavily on that feature.
+The implementation reports:
 
-This provides an interpretable view of which signal characteristics contribute most to modulation classification.
-
----
-
-## Visualization
-
-The project generates visualizations for understanding the signal and model behavior, including:
-
-* IQ signal plots
-* Constellation diagrams
-* Feature distributions
-* Feature scatter plots
-* Confusion matrices
-* Feature importance plots
-* SNR versus classification accuracy
-
-For example, constellation diagrams help visualize how modulation schemes occupy different regions of the I-Q plane.
+* Significant degradation at low SNR
+* Rapid improvement as SNR increases
+* Stronger classification performance at SNR ≥ 10 dB
+* Increased confusion between similar modulation schemes at low SNR
 
 ---
 
-## Technologies Used
+# Technologies Used
 
 ### Programming
 
 * Python
-
-### Numerical & Signal Processing
-
-* NumPy
-* SciPy
+* Jupyter Notebook
 
 ### Machine Learning
 
 * Scikit-learn
-* MLPClassifier
+* MLP Classifier
 * StandardScaler
 * Train/Test Split
 * Classification Metrics
+
+### Signal Processing
+
+* NumPy
+* SciPy
+* Statistical signal analysis
+* Power spectral density analysis
+* Higher-order statistics
 
 ### Visualization
 
 * Matplotlib
 * Seaborn
 
-### Data Handling
+### Data Processing
 
 * Pickle
-* Python file handling
+* NumPy arrays
 
 ---
 
-## Installation
+# Installation
 
 Clone the repository:
 
 ```bash
-git clone https://github.com/suke2004/<repository-name>.git
-cd <repository-name>
+git clone https://github.com/suke2004/amc-iot-ieee2024.git
+cd amc-iot-ieee2024
 ```
 
-Create a virtual environment:
+Install the required Python packages:
 
 ```bash
-python -m venv venv
+pip install numpy scipy scikit-learn matplotlib seaborn jupyter
 ```
 
-Activate it on Windows:
+Launch the notebook:
 
 ```bash
-venv\Scripts\activate
-```
-
-Activate it on Linux/macOS:
-
-```bash
-source venv/bin/activate
-```
-
-Install dependencies:
-
-```bash
-pip install numpy scipy scikit-learn matplotlib seaborn requests
+jupyter notebook amc_iot_ieee2024.ipynb
 ```
 
 ---
 
-## Dataset Setup
+# Running the Project
 
-Place the RadioML dataset file in the project directory:
+1. Clone the repository.
+2. Install the required Python dependencies.
+3. Place the RadioML dataset in the expected location if available.
+4. Open `amc_iot_ieee2024.ipynb`.
+5. Run the notebook sequentially.
+6. The notebook performs:
+
+   * Dataset loading
+   * Signal preprocessing
+   * Feature extraction
+   * Feature scaling
+   * Model training
+   * Prediction
+   * Accuracy evaluation
+   * Confusion matrix generation
+   * SNR analysis
+   * Feature importance analysis
+
+---
+
+# Repository Structure
 
 ```text
-RML2016.10a_dict.pkl
-```
-
-Expected structure:
-
-```text
-project/
-│
-├── RML2016.10a_dict.pkl
-├── notebook.ipynb
+.
+├── LICENSE
 ├── README.md
-└── ...
-```
-
-If the dataset file is not available, the notebook can generate synthetic signal data for experimentation.
-
----
-
-## Running the Project
-
-Launch Jupyter Notebook:
-
-```bash
-jupyter notebook
-```
-
-Open the project notebook and execute the cells sequentially.
-
-The notebook performs:
-
-```text
-Dataset Loading
-      ↓
-Signal Visualization
-      ↓
-Feature Extraction
-      ↓
-Feature Analysis
-      ↓
-Model Training
-      ↓
-Model Evaluation
-      ↓
-SNR Analysis
-      ↓
-Feature Importance
+│
+├── amc_iot_ieee2024.ipynb
+│
+├── signal_gallery.png
+├── feature_scatter.png
+├── confusion_matrix.png
+├── per_class_accuracy.png
+├── accuracy_vs_snr.png
+└── feature_importance.png
 ```
 
 ---
 
-## Project Structure
-
-A recommended repository structure is:
-
-```text
-automatic-modulation-classification/
-│
-├── README.md
-├── notebooks/
-│   └── amc.ipynb
-│
-├── data/
-│   └── RML2016.10a_dict.pkl
-│
-├── models/
-│   └── ...
-│
-├── figures/
-│   ├── signal_gallery.png
-│   ├── feature_scatter.png
-│   ├── feature_importance.png
-│   └── confusion_matrix.png
-│
-└── requirements.txt
-```
-
----
-
-## Research Reference
+# Research Reference
 
 This implementation is based on:
 
 **Yasmín R. Mondino-Llermanos and Graciela Corral-Briones**
 
-> *Automatic Modulation Classification for Low-Power IoT Applications*
+*Automatic Modulation Classification for Low-Power IoT Applications*
 
-**IEEE Latin America Transactions**, Volume 22, Issue 3, March 2024.
+IEEE Latin America Transactions, Volume 22, Number 3, March 2024.
 
 DOI:
 
@@ -493,39 +469,62 @@ DOI:
 10.1109/TLA.2024.10431424
 ```
 
-The project uses the paper as the methodological reference while implementing the feature extraction and lightweight neural-network classification workflow in Python.
+---
+
+# Limitations
+
+The current implementation has several practical limitations:
+
+* Performance decreases significantly at low SNR.
+* Similar modulation schemes can be difficult to distinguish.
+* The approach depends on manually engineered signal features.
+* The lightweight architecture trades model complexity for computational efficiency.
+* Synthetic data generated by the notebook, when used, should not be treated as equivalent to the original RadioML dataset.
+* The current implementation is primarily an experimental notebook rather than a deployment-ready embedded inference system.
 
 ---
 
-## Limitations
-
-* Classification performance decreases under challenging low-SNR conditions.
-* The synthetic-data fallback is intended for demonstration and does not replace evaluation on the original RadioML dataset.
-* The implementation focuses on a lightweight feature-based approach rather than large end-to-end deep-learning architectures.
-* Reported experimental metrics are specific to the implementation configuration and should not be interpreted as universal performance guarantees.
-
----
-
-## Future Improvements
+# Future Improvements
 
 Potential extensions include:
 
-* Evaluation exclusively on the original RadioML 2016.10A dataset
-* Comparison with CNN and CNN-LSTM based AMC models
-* Additional feature-selection techniques
-* Model quantization for embedded deployment
-* ONNX/TFLite deployment
-* Real-time IQ stream classification
-* Evaluation on additional wireless datasets
-* Deployment on resource-constrained IoT hardware
+* Evaluation directly on additional real-world RF datasets
+* Deep learning models operating directly on IQ samples
+* CNN-based modulation classification
+* Lightweight 1D CNN architectures for edge devices
+* Quantization for embedded deployment
+* Model compression and pruning
+* Real-time SDR integration
+* Streaming IQ signal classification
+* Evaluation on additional wireless standards and channel conditions
 
 ---
 
-## License
+# Project Objective
 
-This project is intended for educational and research purposes.
+The primary objective is to investigate whether a compact set of statistical and signal-processing features can provide useful modulation classification performance while keeping the machine learning model lightweight.
 
-If you use the methodology or datasets associated with the referenced work, follow their respective licensing and attribution requirements.
+The project therefore combines:
+
+```text
+Wireless Signal Processing
+          +
+Feature Engineering
+          +
+Machine Learning
+          +
+SNR Analysis
+          +
+Lightweight Classification
+```
+
+for an AMC workflow relevant to **low-power and resource-constrained IoT systems**.
+
+---
+
+# Acknowledgements
+
+This project was implemented based on the methodology described in the referenced IEEE publication and uses the RadioML 2016.10A dataset structure for experimentation.
 
 ---
 
@@ -536,12 +535,4 @@ If you use the methodology or datasets associated with the referenced work, foll
 Electronics and Communication Engineering
 NIT Trichy
 
-GitHub: `https://github.com/KarnatiMahalaxmi`
-
----
-
-## Acknowledgements
-
-* The authors of the referenced IEEE research paper
-* The creators of the RadioML 2016.10A dataset
-* The open-source Python scientific computing and machine-learning ecosystem
+[GitHub](https://github.com/KarnatiMahalaxmi)
